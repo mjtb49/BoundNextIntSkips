@@ -34,38 +34,44 @@ public class BoundNextIntSkips {
         System.out.println("Loop size: " +(mask+1-firstSkipSeed));
         System.out.println("Need " + (float)((mask+1-firstSkipSeed)*8)/(1000*1000*1000) + " GB of memory to store resulting dfz's");
 
+        DiscreteLogSolver d = new DiscreteLogSolver(0x5deece66dL, 11, 48);
         long[] distancesOfOffenders =  LongStream.range(firstSkipSeed, mask+1).parallel()
-                .map(DiscreteLog::distanceFromZero).sorted().toArray();
+                .map(d::distanceFromZero).sorted().toArray();
         System.out.println("Computed DFZ");
 
+        LinkedList<Long> lastDistances = new LinkedList<>();
+        long firstDistance = distancesOfOffenders[0];
+        lastDistances.add(firstDistance);
 
-        //TODO lazily done so doesn't detect if the worst case crosses the 0 seed.
-        LinkedList<Long> lastDistances = new LinkedList<Long>();
-        lastDistances.add(distancesOfOffenders[distancesOfOffenders.length-1]);
         int currentScore = 1;
         int bestScore = 1;
-        long bestDistance = distancesOfOffenders[distancesOfOffenders.length-1];
-        for (long nextDistance: distancesOfOffenders) {
-            lastDistances.add(nextDistance);
-            if (((nextDistance - lastDistances.peekFirst()) & mask) <= numCalls + currentScore) {
+        long bestDistance = firstDistance;
+        long startingDistance;
+        int totalChecked = 1;
+        boolean checkedEverything = false;
+        while (!checkedEverything) {
+            startingDistance = lastDistances.peekFirst();
+            int index =  totalChecked % distancesOfOffenders.length;
+            lastDistances.add(distancesOfOffenders[index]);
+
+            if (((distancesOfOffenders[index] - startingDistance + 1) & mask) <= numCalls + currentScore) {
                 currentScore++; // we had a skip so distance in seeds is gonna go up.
                 if (currentScore > bestScore) {
                     bestScore = currentScore;
-                    bestDistance = lastDistances.peekFirst();
-                   /* System.out.println("Found new best!");
-                    for (long l : lastDistances)
-                        System.out.print(l + " ");
-                    System.out.println();*/
+                    bestDistance = startingDistance;
                 }
             } else {
-                lastDistances.removeFirst();
-                while (((nextDistance - lastDistances.peekFirst()) & mask) > numCalls + currentScore) {
+                if (firstDistance == lastDistances.removeFirst() && totalChecked >= mask+1-firstSkipSeed)
+                    checkedEverything = true;
+                while (((distancesOfOffenders[index] - lastDistances.peekFirst() + 1) & mask) > numCalls + currentScore) {
+                    if (firstDistance == lastDistances.removeFirst() && totalChecked >= mask+1-firstSkipSeed)
+                        checkedEverything = true;
                     currentScore--;
-                    lastDistances.removeFirst();
                 }
             }
-        }
-        //System.out.println("There is at least one run of length " + bestScore + " starting at " + bestDistance +" calls after 0");
+            totalChecked++;
+
+        };
         return new BNIResult(bestScore, bestDistance);
     }
 
@@ -79,8 +85,8 @@ public class BoundNextIntSkips {
 
     public static void main(String[] args) {
         System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", "20");
-        long NUM_CALLS = 5000000000L;
-        BNIResult r = boundNextIntSkipsAndGetDFZ(9000, NUM_CALLS);
+        long NUM_CALLS = 1000000000;
+        BNIResult r = boundNextIntSkipsAndGetDFZ(123, NUM_CALLS);
         System.out.println("There is a maximal run of " + NUM_CALLS +" seeds having "
                 + r.bound + " skips starting at " + r.distance +" calls after 0");
     }
