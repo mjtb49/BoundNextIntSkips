@@ -1,6 +1,5 @@
-import java.util.Iterator;
-import java.util.TreeSet;
-import java.util.LinkedList;
+import java.util.*;
+import java.util.stream.LongStream;
 
 final class BNIResult
 {
@@ -27,29 +26,26 @@ public class BoundNextIntSkips {
      * is achieved.
      */
     public static BNIResult boundNextIntSkipsAndGetDFZ(int n, long numCalls) {
-        TreeSet<Long> distancesOfOffenders = new TreeSet<>();
+
 
         long firstSkipSeed = ((1L << 31) - ((1L << 31) % n)) << 17;
         long mask = (1L << 48) - 1;
-        DiscreteLogSolver d = new DiscreteLogSolver(0x5deece66dL, 11, 48);
-        for (long s = firstSkipSeed; s <= mask; s++) {
-            /*if (s % 100000 == 0)
-                System.out.println("Progress " + (s - firstSkipSeed) / (double) (mask - firstSkipSeed));*/
-            distancesOfOffenders.add(d.distanceFromZero(s));
-        }
+
+        System.out.println("Loop size: " +(mask+1-firstSkipSeed));
+        System.out.println("Need " + (float)((mask+1-firstSkipSeed)*8)/(1000*1000*1000) + " GB of memory to store resulting dfz's");
+
+        long[] distancesOfOffenders =  LongStream.range(firstSkipSeed, mask+1).parallel()
+                .map(DiscreteLog::distanceFromZero).sorted().toArray();
+        System.out.println("Computed DFZ");
+
 
         //TODO lazily done so doesn't detect if the worst case crosses the 0 seed.
-        LinkedList<Long> lastDistances = new LinkedList<>();
-        lastDistances.add(distancesOfOffenders.last());
-
-        if (distancesOfOffenders.higher(mask - numCalls) != null)
-            System.err.println("There is potentially a missed run of seeds crossing 0");
-
+        LinkedList<Long> lastDistances = new LinkedList<Long>();
+        lastDistances.add(distancesOfOffenders[distancesOfOffenders.length-1]);
         int currentScore = 1;
         int bestScore = 1;
-        long bestDistance = distancesOfOffenders.last();
-        while (!distancesOfOffenders.isEmpty()) {
-            long nextDistance = distancesOfOffenders.pollFirst();
+        long bestDistance = distancesOfOffenders[distancesOfOffenders.length-1];
+        for (long nextDistance: distancesOfOffenders) {
             lastDistances.add(nextDistance);
             if (((nextDistance - lastDistances.peekFirst()) & mask) <= numCalls + currentScore) {
                 currentScore++; // we had a skip so distance in seeds is gonna go up.
@@ -82,8 +78,9 @@ public class BoundNextIntSkips {
     }
 
     public static void main(String[] args) {
-        long NUM_CALLS = 5000000L;
-        BNIResult r = boundNextIntSkipsAndGetDFZ(3, NUM_CALLS);
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", "20");
+        long NUM_CALLS = 5000000000L;
+        BNIResult r = boundNextIntSkipsAndGetDFZ(9000, NUM_CALLS);
         System.out.println("There is a maximal run of " + NUM_CALLS +" seeds having "
                 + r.bound + " skips starting at " + r.distance +" calls after 0");
     }
