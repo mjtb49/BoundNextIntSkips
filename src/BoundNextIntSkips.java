@@ -1,3 +1,4 @@
+import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.LinkedList;
 
@@ -30,16 +31,20 @@ public class BoundNextIntSkips {
 
         long firstSkipSeed = ((1L << 31) - ((1L << 31) % n)) << 17;
         long mask = (1L << 48) - 1;
-
+        DiscreteLogSolver d = new DiscreteLogSolver(0x5deece66dL, 11, 48);
         for (long s = firstSkipSeed; s <= mask; s++) {
             /*if (s % 100000 == 0)
                 System.out.println("Progress " + (s - firstSkipSeed) / (double) (mask - firstSkipSeed));*/
-            distancesOfOffenders.add(DiscreteLog.distanceFromZero(s));
+            distancesOfOffenders.add(d.distanceFromZero(s));
         }
 
         //TODO lazily done so doesn't detect if the worst case crosses the 0 seed.
-        LinkedList<Long> lastDistances = new LinkedList<Long>();
+        LinkedList<Long> lastDistances = new LinkedList<>();
         lastDistances.add(distancesOfOffenders.last());
+
+        if (distancesOfOffenders.higher(mask - numCalls) != null)
+            System.err.println("There is potentially a missed run of seeds crossing 0");
+
         int currentScore = 1;
         int bestScore = 1;
         long bestDistance = distancesOfOffenders.last();
@@ -77,7 +82,7 @@ public class BoundNextIntSkips {
     }
 
     public static void main(String[] args) {
-        long NUM_CALLS = 5000000000L;
+        long NUM_CALLS = 5000000L;
         BNIResult r = boundNextIntSkipsAndGetDFZ(3, NUM_CALLS);
         System.out.println("There is a maximal run of " + NUM_CALLS +" seeds having "
                 + r.bound + " skips starting at " + r.distance +" calls after 0");
